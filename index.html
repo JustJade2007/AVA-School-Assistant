@@ -4,10 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AVA (Digital Version) (BETA)</title>
+    <!-- Tailwind CSS via CDN for simplicity in styling without build steps for CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
     <script>
-      // Polyfill for process.env to prevent "process is not defined" crashes in browser environments
+      // Runtime Polyfill for process.env (Safety net for non-build environments or runtime access)
       window.process = { env: { API_KEY: '' } };
     </script>
     <style>
@@ -88,21 +89,11 @@
                           linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+  <link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-slate-950 text-slate-200 antialiased overflow-hidden selection:bg-cyan-500/30">
     <div id="root"></div>
+    <!-- Vite Entry Point -->
     <script type="module" src="./index.tsx"></script>
   <script type="module" src="/index.tsx"></script>
 </body>
