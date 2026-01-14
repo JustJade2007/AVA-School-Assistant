@@ -1,0 +1,9 @@
+{
+  "name": "AVA (Digital Version) (BETA)",
+  "description": "Artificial Vision Assistant - A smart desktop assistant that monitors your screen to identify questions and provide answers in real-time using Google Gemini.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ]
+}
