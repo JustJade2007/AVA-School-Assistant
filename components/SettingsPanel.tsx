@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppSettings, LogEntry } from '../types';
 import { Sliders, Zap, MousePointer2, Eye, Timer, PlayCircle, ChevronDown, ChevronUp, Trash2, Sun, Moon, MonitorOff, Activity, Key, Cpu, Sparkles, Volume2 } from 'lucide-react';
 
@@ -8,6 +8,8 @@ interface SettingsPanelProps {
   updateSettings: (newSettings: Partial<AppSettings>) => void;
   onLog: (message: string, type?: LogEntry['type']) => void;
   onClearLogs: () => void;
+  apiKey: string;
+  setApiKey: (key: string) => void;
 }
 
 const GEMINI_MODELS = [
@@ -16,9 +18,14 @@ const GEMINI_MODELS = [
   { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite', desc: 'Eco: Highly efficient' },
 ];
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings, onLog, onClearLogs }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings, onLog, onClearLogs, apiKey, setApiKey }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [localKey, setLocalKey] = useState(apiKey);
   const isLight = settings.themeMode === 'light';
+
+  useEffect(() => {
+    setLocalKey(apiKey);
+  }, [apiKey]);
 
   const handleToggle = (key: keyof AppSettings, label: string) => {
     const newValue = !settings[key];
@@ -32,13 +39,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
     onLog(`System Model: ${newModel}`, 'success');
   };
 
-  const handleChangeKey = async () => {
-    try {
-      onLog("Opening Secure Key Selector...", 'info');
-      await window.aistudio.openSelectKey();
-      onLog("New Billing Project Active.", 'success');
-    } catch (err) {
-      onLog("Selection failed.", 'warning');
+  const handleKeyBlur = () => {
+    if (localKey !== apiKey) {
+      setApiKey(localKey);
+      onLog("API Key configuration updated.", 'success');
     }
   };
 
@@ -214,14 +218,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
              {/* KEY SELECTION */}
              <div className="space-y-4 pt-4 border-t border-white/5">
                 <label className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                  <Key className="w-4 h-4 text-indigo-400" /> Billing Project
+                  <Key className="w-4 h-4 text-indigo-400" /> API Key Configuration
                 </label>
-                <button 
-                  onClick={handleChangeKey}
-                  className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl text-xs font-black uppercase tracking-[0.1em] transition-all hover:scale-[1.02] active:scale-[0.98] ${isLight ? 'bg-indigo-600 text-white shadow-lg' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30'}`}
-                >
-                   <Key className="w-4 h-4" /> Switch Billing Key
-                </button>
+                <div className="relative">
+                  <input 
+                    type="password"
+                    value={localKey}
+                    onChange={(e) => setLocalKey(e.target.value)}
+                    onBlur={handleKeyBlur}
+                    placeholder="Enter Gemini API Key"
+                    className={`w-full p-4 rounded-xl text-xs font-mono tracking-widest outline-none border-2 focus:border-indigo-500/50 transition-all ${inputBg}`}
+                  />
+                </div>
              </div>
 
              {/* APPEARANCE TOGGLES */}
