@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Monitor, StopCircle, Video, Scan, Aperture, Key } from 'lucide-react';
+import { Monitor, StopCircle, Video, Scan, Aperture } from 'lucide-react';
 import { AnalysisResult, AppSettings, AppState, LogEntry } from './types';
 import { analyzeScreenFrame } from './services/geminiService';
 import { detectText, calculateTextSimilarity } from './services/ocrService';
@@ -24,29 +24,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   speakAnswer: false,
 };
 
-// Security & Storage Helpers
-const XOR_KEY = "AVA_NEURAL_SECURE_V1";
-const encryptKey = (text: string): string => {
-  try {
-    let result = "";
-    for (let i = 0; i < text.length; i++) {
-      result += String.fromCharCode(text.charCodeAt(i) ^ XOR_KEY.charCodeAt(i % XOR_KEY.length));
-    }
-    return btoa(result);
-  } catch (e) { return ""; }
-};
-
-const decryptKey = (encoded: string): string => {
-  try {
-    const text = atob(encoded);
-    let result = "";
-    for (let i = 0; i < text.length; i++) {
-      result += String.fromCharCode(text.charCodeAt(i) ^ XOR_KEY.charCodeAt(i % XOR_KEY.length));
-    }
-    return result;
-  } catch (e) { return ""; }
-};
-
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -55,8 +32,6 @@ const App: React.FC = () => {
   const [boundingBoxStyle, setBoundingBoxStyle] = useState<React.CSSProperties | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [apiKey, setApiKey] = useState<string>('');
-  const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null); 
@@ -66,31 +41,6 @@ const App: React.FC = () => {
   const isAutomationRunningRef = useRef<boolean>(false);
 
   const isLight = settings.themeMode === 'light';
-
-  // Initialize API Key from Cookies
-  useEffect(() => {
-    const getCookie = (name: string) => {
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(';').shift();
-    };
-    
-    const savedKey = getCookie('gemini_api_key');
-    if (savedKey) {
-      const decrypted = decryptKey(savedKey);
-      if (decrypted) setApiKey(decrypted);
-      else setShowKeyModal(true);
-    } else {
-      setShowKeyModal(true);
-    }
-  }, []);
-
-  const handleSaveKey = (key: string) => {
-    setApiKey(key);
-    document.cookie = `gemini_api_key=${encryptKey(key)}; path=/; max-age=31536000; SameSite=Strict`;
-    setShowKeyModal(false);
-    addLog("Secure API Key updated.", 'success');
-  };
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => {
@@ -147,14 +97,6 @@ const App: React.FC = () => {
 
   const performAnalysis = async (base64Image: string) => {
       processingRef.current = true;
-      
-      if (!apiKey) {
-        addLog("Missing API Key. Analysis aborted.", 'error');
-        setShowKeyModal(true);
-        processingRef.current = false;
-        return;
-      }
-
       if (!settings.simplifiedMode) {
         setIsFlashing(true);
         setTimeout(() => setIsFlashing(false), 300);
@@ -162,8 +104,7 @@ const App: React.FC = () => {
 
       try {
           const rawBase64 = base64Image.split(',')[1];
-          // @ts-ignore - Assuming service is updated to accept apiKey
-          const result = await analyzeScreenFrame(rawBase64, settings.modelName, apiKey);
+          const result = await analyzeScreenFrame(rawBase64, settings.modelName);
           
           if (result.error) {
              addLog(`Gemini [${settings.modelName}]: ${result.error}`, 'error');
@@ -321,37 +262,6 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen font-sans overflow-hidden flex flex-col transition-all duration-700 ${bgClass}`}>
       <canvas ref={canvasRef} className="hidden" />
-      
-      {/* API KEY MODAL */}
-      {showKeyModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in-up">
-          <div className="bg-slate-950 border border-slate-800 p-8 rounded-2xl max-w-md w-full shadow-2xl shadow-cyan-900/20 space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 to-blue-600"></div>
-            <div className="flex items-center gap-3 text-cyan-400 mb-2">
-              <Key className="w-6 h-6" />
-              <h2 className="text-xl font-black uppercase tracking-wider">Security Clearance</h2>
-            </div>
-            <p className="text-slate-400 text-xs leading-relaxed font-mono">
-              Access to the Neural Interface requires a valid Gemini API Key. 
-              This key will be encrypted and stored locally in your neural cookies.
-            </p>
-            <input 
-              type="password" 
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Paste API Key Here"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl p-4 text-white font-mono text-xs focus:border-cyan-500 outline-none transition-colors placeholder:text-slate-600"
-            />
-            <button 
-              onClick={() => handleSaveKey(apiKey)}
-              disabled={!apiKey}
-              className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-cyan-900/20"
-            >
-              Initialize System
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
         <div className={`lg:col-span-8 flex flex-col border-r relative z-10 h-full ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
            <div className={`p-5 flex justify-between items-center shrink-0 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
@@ -418,7 +328,7 @@ const App: React.FC = () => {
                </div>
            </div>
            <div className={`h-[55%] min-h-[400px] border-t ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-950'}`}>
-               <SettingsPanel settings={settings} updateSettings={updateSettings} onLog={addLog} onClearLogs={clearLogs} apiKey={apiKey} setApiKey={handleSaveKey} />
+               <SettingsPanel settings={settings} updateSettings={updateSettings} onLog={addLog} onClearLogs={clearLogs} />
            </div>
         </div>
       </div>
