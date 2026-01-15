@@ -10,6 +10,8 @@ interface SettingsPanelProps {
 }
 
 const GEMINI_MODELS = [
+  { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', desc: 'Next-Gen: Advanced reasoning & logic' },
+  { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', desc: 'Next-Gen: Ultra-fast intelligence' },
   { value: 'gemini-3-flash-preview', label: 'Gemini 3 Flash', desc: 'Default: Fast & Balanced' },
   { value: 'gemini-3-pro-preview', label: 'Gemini 3 Pro', desc: 'Premium: Best for complex logic' },
   { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite', desc: 'Eco: Highly efficient' },
@@ -124,13 +126,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
              )}
 
              <div className="flex justify-between items-center cursor-pointer p-3 rounded-xl hover:bg-white/5 transition-colors" onClick={() => handleToggle('triggerSmart', 'Smart Scan')}>
-                <span className="text-sm font-bold flex items-center gap-3">
-                  <Eye className="w-5 h-5 text-cyan-400" /> Smart (OCR)
-                </span>
+                <div className="flex flex-col">
+                    <span className="text-sm font-bold flex items-center gap-3">
+                      <Zap className="w-5 h-5 text-cyan-400" /> Smart Scan (AI)
+                    </span>
+                    <span className={`text-[9px] ml-8 font-mono tracking-wider opacity-60 ${textMuted}`}>Uses Tokens</span>
+                </div>
                 <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${settings.triggerSmart ? 'bg-cyan-500 border-cyan-500 scale-110' : (isLight ? 'border-slate-300' : 'border-slate-600')}`}>
                   {settings.triggerSmart && <Sparkles className="w-4 h-4 text-white" />}
                 </div>
              </div>
+             
+             {settings.triggerSmart && (
+               <div className="px-3 animate-fade-in-up border-l-2 border-slate-700/50 ml-4 pl-2">
+                  <div className="flex justify-between items-center cursor-pointer p-2 rounded-xl hover:bg-white/5 transition-colors" onClick={() => handleToggle('triggerHybrid', 'Hybrid Filter')}>
+                    <div className="flex flex-col">
+                        <span className={`text-xs font-bold flex items-center gap-2 ${settings.triggerHybrid ? 'text-emerald-400' : textMuted}`}>
+                          <Eye className="w-3 h-3" /> Hybrid Filter
+                        </span>
+                        <span className={`text-[9px] ml-5 ${textMuted}`}>Saves tokens by detecting changes locally first.</span>
+                    </div>
+                    <div className={`w-8 h-5 rounded-full relative transition-all ${settings.triggerHybrid ? 'bg-emerald-500' : 'bg-slate-700'}`}>
+                        <div className={`w-3 h-3 rounded-full bg-white absolute top-1 transition-all ${settings.triggerHybrid ? 'left-4' : 'left-1'}`} />
+                    </div>
+                  </div>
+                  
+                  {settings.triggerHybrid && (
+                      <div className="mt-3 px-1">
+                        <div className="flex justify-between text-[9px] font-mono font-bold mb-1">
+                            <span className={textMuted}>SENSITIVITY</span>
+                            <span className="text-emerald-400">{settings.smartScanSensitivity}%</span>
+                        </div>
+                        <input
+                            type="range" min="10" max="100" step="5"
+                            value={settings.smartScanSensitivity}
+                            onChange={(e) => updateSettings({ smartScanSensitivity: parseInt(e.target.value) })}
+                            className="w-full h-2 rounded-full appearance-none cursor-pointer bg-slate-700 accent-emerald-400"
+                        />
+                      </div>
+                  )}
+               </div>
+             )}
           </div>
         </div>
       </div>
@@ -198,6 +234,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
         
         {showAdvanced && (
           <div className="p-6 space-y-8 animate-fade-in-up">
+
              {/* MODEL SELECTION */}
              <div className="space-y-4">
                 <label className="text-xs font-black uppercase tracking-widest flex items-center gap-2">
@@ -275,6 +312,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
                   </span>
                   <button onClick={() => handleToggle('simplifiedMode', 'Performance')} className={`w-12 h-7 rounded-full relative ${settings.simplifiedMode ? 'bg-purple-500' : 'bg-slate-700'}`}>
                     <div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-all ${settings.simplifiedMode ? 'left-6' : 'left-1'}`} />
+                  </button>
+               </div>
+
+               <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-widest flex items-center gap-3">
+                    <Activity className="w-4 h-4 text-red-400" /> Debug Mode
+                  </span>
+                  <button onClick={() => handleToggle('debugMode', 'Debug')} className={`w-12 h-7 rounded-full relative ${settings.debugMode ? 'bg-red-500' : 'bg-slate-700'}`}>
+                    <div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-all ${settings.debugMode ? 'left-6' : 'left-1'}`} />
                   </button>
                </div>
              </div>

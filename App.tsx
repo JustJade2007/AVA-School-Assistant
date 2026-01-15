@@ -2,8 +2,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Monitor, StopCircle, Video, Scan, Aperture } from 'lucide-react';
 import { AnalysisResult, AppSettings, AppState, LogEntry } from './types';
-import { analyzeScreenFrame } from './services/geminiService';
-import { detectText, calculateTextSimilarity } from './services/ocrService';
+import { analyzeScreenFrame, checkForNewQuestion } from './services/geminiService';
+import { detectText, calculateTextSimilarity, isTextSubset } from './services/ocrService';
 import AnalysisView from './components/AnalysisView';
 import SettingsPanel from './components/SettingsPanel';
 import ConsoleLog from './components/ConsoleLog';
@@ -12,9 +12,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   automationEnabled: false,
   triggerTime: false,
   triggerSmart: true,
+  triggerHybrid: true,
   scanIntervalMs: 3000,
   smartScanDelay: 1000,
-  smartScanSensitivity: 80,
+  smartScanSensitivity: 50,
   confidenceThreshold: 0.7,
   autoSelect: false,
   showLogs: true,
@@ -22,6 +23,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   simplifiedMode: false,
   modelName: 'gemini-3-flash-preview',
   speakAnswer: false,
+  debugMode: false,
 };
 
 const App: React.FC = () => {
@@ -38,21 +40,39 @@ const App: React.FC = () => {
   const automationTimeoutRef = useRef<number | null>(null);
   const processingRef = useRef<boolean>(false); 
   const lastOcrTextRef = useRef<string>("");
+  const lastScreenshotRef = useRef<string | null>(null);
   const isAutomationRunningRef = useRef<boolean>(false);
+  const ocrStabilityCounterRef = useRef<number>(0);
 
   const isLight = settings.themeMode === 'light';
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => {
+        const timestamp = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second:'2-digit' });
+        
+        // Consolidate repetitive logs if not in debug mode
+        if (!settings.debugMode && prev.length > 0) {
+           const lastLog = prev[prev.length - 1];
+           if (lastLog.message === message && lastLog.type === type) {
+              const updatedLog = {
+                 ...lastLog,
+                 count: (lastLog.count || 1) + 1,
+                 timestamp // Update timestamp to latest occurrence
+              };
+              return [...prev.slice(0, -1), updatedLog];
+           }
+        }
+
         const newLog = {
           id: Math.random().toString(36).substr(2, 9),
-          timestamp: new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second:'2-digit' }),
+          timestamp,
           message,
-          type
+          type,
+          count: 1
         };
         return [...prev.slice(-49), newLog]; 
     });
-  }, []);
+  }, [settings.debugMode]);
 
   const clearLogs = useCallback(() => {
     setLogs([]);
@@ -104,18 +124,41 @@ const App: React.FC = () => {
 
       try {
           const rawBase64 = base64Image.split(',')[1];
-          const result = await analyzeScreenFrame(rawBase64, settings.modelName, settings.apiKey);
           
+          // Perform local OCR first to bypass Gemini's RECITATION (copyright) filters
+          if (settings.debugMode) addLog("Initiating local OCR scan...", 'info');
+          const localOcrText = await detectText(base64Image);
+
+          const result = await analyzeScreenFrame(
+              rawBase64, 
+              settings.modelName, 
+              settings.apiKey,
+              settings.debugMode ? addLog : undefined,
+              localOcrText
+          );
+          
+          const activeModel = result.modelUsed || settings.modelName;
+          const attemptInfo = result.attempts && result.attempts > 1 ? ` (Attempt ${result.attempts})` : '';
+
+          // Inject local OCR text if Gemini used the bypass token
+          if (result.questionText === 'USE_LOCAL_OCR') {
+              result.questionText = localOcrText;
+          }
+
           if (result.error) {
-             addLog(`Gemini [${settings.modelName}]: ${result.error}`, 'error');
+             addLog(`Gemini [${activeModel}]: ${result.error}${attemptInfo}`, 'error');
              if (result.error.includes('Quota') || result.error.includes('429')) {
                  setSettings(s => ({ ...s, automationEnabled: false }));
                  addLog("Recommendation: Select a paid Billing Key in settings.", 'warning');
              }
           } else if (result.hasQuestion) {
-             addLog(`Analysis [${settings.modelName}]: Detected question.`, 'success');
+             const fallbackIndicator = result.modelUsed && result.modelUsed !== settings.modelName ? ' [FALLBACK]' : '';
+             addLog(`Analysis [${activeModel}]${fallbackIndicator}: Detected question.${attemptInfo}`, 'success');
+             lastScreenshotRef.current = base64Image; 
              // Trigger Voice Output
              speakAnswer(result);
+          } else if (settings.debugMode) {
+             addLog(`Analysis [${activeModel}]: No question found.${attemptInfo}`, 'info');
           }
 
           setLastResult(result);
@@ -147,20 +190,72 @@ const App: React.FC = () => {
         if (!processingRef.current) {
             const img = captureFrame();
             if (img) {
-                const text = await detectText(img);
-                const similarity = calculateTextSimilarity(text, lastOcrTextRef.current);
-                const sensitivityFactor = settings.smartScanSensitivity / 100; 
-                const threshold = 0.3 + (sensitivityFactor * 0.65);
-                const hasChanged = similarity < threshold && text.length > 20;
+                let shouldCheckAI = true;
+                let referenceForAI = lastOcrTextRef.current;
 
-                if (hasChanged) {
-                    addLog("Smart Trigger: Text delta detected.", 'success');
-                    lastOcrTextRef.current = text;
-                    if (settings.smartScanDelay > 0) {
-                        await new Promise(r => setTimeout(r, settings.smartScanDelay));
+                if (settings.triggerHybrid) {
+                    shouldCheckAI = false;
+                    const rawText = await detectText(img);
+                    
+                    // Normalize text:
+                    // 1. Replace digits with '#' to ignore timers/counters (e.g. "Time 10" -> "Time #", "Time 09" -> "Time #")
+                    // 2. Remove special chars
+                    // 3. Collapse spaces
+                    const text = rawText
+                        .replace(/\d+/g, '#') 
+                        .replace(/[^a-zA-Z#\s]/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .toLowerCase();
+
+                    const isMouseCovering = isTextSubset(lastOcrTextRef.current, text);
+                    const isFeedbackAdded = isTextSubset(text, lastOcrTextRef.current);
+                    const similarity = calculateTextSimilarity(text, lastOcrTextRef.current);
+                    
+                    const sensitivityFactor = settings.smartScanSensitivity / 100; 
+                    const threshold = 0.2 + (sensitivityFactor * 0.6); // 0.68 @ 80
+                    
+                    const rawChange = !isMouseCovering && !isFeedbackAdded && similarity < threshold && text.length > 15;
+
+                    if (settings.debugMode) {
+                         const msg = `[DEBUG] OCR: "${text.substring(0, 15)}..." | Ref: "${lastOcrTextRef.current.substring(0, 15)}..." | Sim: ${similarity.toFixed(2)} | Sub: ${isMouseCovering}/${isFeedbackAdded} | Stab: ${ocrStabilityCounterRef.current}`;
+                         addLog(msg, 'info');
                     }
-                    const freshImg = captureFrame();
-                    if (freshImg) await performAnalysis(freshImg);
+
+                    if (rawChange) {
+                        ocrStabilityCounterRef.current += 1;
+                        if (ocrStabilityCounterRef.current >= 3) {
+                             shouldCheckAI = true;
+                             referenceForAI = lastOcrTextRef.current; // Use the OLD reference for comparison
+                             lastOcrTextRef.current = text; // Update ref to the new text
+                             ocrStabilityCounterRef.current = 0;
+                             if (settings.debugMode) {
+                                 addLog(`Hybrid Trigger: OCR detected change. Verifying with AI...`, 'info');
+                             }
+                        }
+                    } else {
+                        ocrStabilityCounterRef.current = 0;
+                    }
+                }
+
+                if (shouldCheckAI) {
+                    const { isNew, currentText, reason, error } = await checkForNewQuestion(img, lastScreenshotRef.current, settings.apiKey);
+                    
+                    if (error) {
+                        addLog(`AI Watchdog Error: ${error}`, 'error');
+                    } else if (isNew) {
+                         addLog(`AI Watchdog: New question detected.`, 'success');
+                         
+                         lastScreenshotRef.current = img; 
+                         if (!settings.triggerHybrid) {
+                             lastOcrTextRef.current = currentText;
+                         }
+                         
+                         await performAnalysis(img);
+                    } else if (settings.debugMode) {
+                         // Log negative result so user knows the AI check happened
+                         addLog(`AI Watchdog: No new question. (${reason || 'Content match'})`, 'info');
+                    }
                 }
             }
         }

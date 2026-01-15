@@ -21,6 +21,8 @@ export interface AnalysisResult {
   suggestedAction: string | null;
   boundingBox?: BoundingBox | null;
   error?: string; // API Error message
+  modelUsed?: string;
+  attempts?: number;
 }
 
 export interface AppSettings {
@@ -29,12 +31,13 @@ export interface AppSettings {
   
   // Triggers
   triggerTime: boolean;
-  triggerSmart: boolean; // Uses local OCR to detect text change
+  triggerSmart: boolean; // Uses AI to detect text change
+  triggerHybrid: boolean; // Uses local OCR to filter static screens before AI check
 
   // Config
   scanIntervalMs: number; // For triggerTime
   smartScanDelay: number; // For triggerSmart (debounce after change)
-  smartScanSensitivity: number; // 1-100 (Threshold for what counts as text change)
+  smartScanSensitivity: number; // 1-100 (Threshold for local OCR change detection)
   
   confidenceThreshold: number;
   autoSelect: boolean; // Simulates clicking
@@ -45,6 +48,7 @@ export interface AppSettings {
   simplifiedMode: boolean; // Disables animations
   modelName: string; // The specific Gemini model to use
   speakAnswer: boolean; // Read answer out loud
+  debugMode: boolean; // Show verbose logs for OCR/AI
   apiKey?: string; // Custom Gemini API Key
 }
 
@@ -60,6 +64,7 @@ export interface LogEntry {
   timestamp: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
+  count?: number;
 }
 
 /**
