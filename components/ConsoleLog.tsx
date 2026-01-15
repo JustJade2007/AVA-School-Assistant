@@ -38,6 +38,11 @@ const ConsoleLog: React.FC<ConsoleLogProps> = ({ logs }) => {
               {log.type === 'error' && '!! '}
               {log.type === 'warning' && '>> '}
               {log.message}
+              {log.count && log.count > 1 && (
+                <span className="ml-2 px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[8px] font-bold border border-slate-700">
+                  x{log.count}
+                </span>
+              )}
             </span>
           </div>
         ))}

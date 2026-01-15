@@ -43,3 +43,24 @@ export const calculateTextSimilarity = (text1: string, text2: string): number =>
     
     return intersection.size / union.size;
 };
+
+export const isTextSubset = (parentText: string, childText: string): boolean => {
+    if (!parentText || !childText) return false;
+    
+    // Clean up text
+    const clean = (t: string) => t.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+    
+    const parentWords = new Set(clean(parentText));
+    const childWords = clean(childText);
+    
+    if (childWords.length === 0) return true;
+
+    let matchCount = 0;
+    for (const word of childWords) {
+        if (parentWords.has(word)) matchCount++;
+    }
+    
+    // If > 80% of words in the new text (child) are present in the old text (parent),
+    // we consider it a subset (likely occlusion/mouse covering).
+    return (matchCount / childWords.length) > 0.8;
+};
