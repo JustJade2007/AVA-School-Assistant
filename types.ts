@@ -63,7 +63,6 @@ export interface LogEntry {
 
 /**
  * Interface for the AI Studio key selection utility.
- * Removed local definition to avoid shadowing global AIStudio type.
  */
 
 // Extend the global window object
@@ -73,7 +72,5 @@ declare global {
       performAction: (action: string, options: QuestionOption[]) => void;
     };
     Tesseract?: any;
-    // Removed redundant aistudio declaration as it is already defined on the global Window interface
-    // by the environment, which was causing "identical modifiers" and "same type" conflicts.
   }
 }
