@@ -328,7 +328,7 @@ const App: React.FC = () => {
                </div>
            </div>
            <div className={`h-[55%] min-h-[400px] border-t ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-950'}`}>
-               <SettingsPanel settings={settings} updateSettings={updateSettings} onLog={addLog} onClearLogs={clearLogs} />
+               <SettingsPanel settings={settings} updateSettings={updateSettings} onClearLogs={clearLogs} />
            </div>
         </div>
       </div>

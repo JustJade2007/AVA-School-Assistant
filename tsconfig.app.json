@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src", "components", "services", "types.ts", "App.tsx", "index.tsx"],
+  "exclude": ["vite.config.ts"]
+}

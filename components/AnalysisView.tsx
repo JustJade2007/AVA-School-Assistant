@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { AnalysisResult } from '../types';
-import { CheckCircle, XCircle, AlertCircle, BrainCircuit, Sparkles, Terminal, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, BrainCircuit, Sparkles, Terminal, AlertTriangle } from 'lucide-react';
 
 interface AnalysisViewProps {
   result: AnalysisResult | null;
