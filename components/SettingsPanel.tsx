@@ -17,6 +17,7 @@ const GEMINI_MODELS = [
 
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings, onLog, onClearLogs }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showKeyInput, setShowKeyInput] = useState(false);
   const isLight = settings.themeMode === 'light';
 
   const handleToggle = (key: keyof AppSettings, label: string) => {
@@ -32,16 +33,21 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
   };
 
   const handleChangeKey = async () => {
-    if (!window.aistudio) {
-      onLog("API Key Selector not available in this environment. Please configure via build secrets.", 'warning');
-      return;
+    if (window.aistudio) {
+      try {
+        onLog("Opening Secure Key Selector...", 'info');
+        await window.aistudio.openSelectKey();
+        onLog("New Billing Project Active.", 'success');
+        return;
+      } catch (err) {
+        onLog("Selection failed.", 'warning');
+      }
     }
-    try {
-      onLog("Opening Secure Key Selector...", 'info');
-      await window.aistudio.openSelectKey();
-      onLog("New Billing Project Active.", 'success');
-    } catch (err) {
-      onLog("Selection failed.", 'warning');
+    
+    // Fallback to manual entry
+    setShowKeyInput(!showKeyInput);
+    if (!showKeyInput) {
+       onLog("Manual Key Entry Enabled.", 'info');
     }
   };
 
@@ -223,8 +229,23 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
                   onClick={handleChangeKey}
                   className={`w-full flex items-center justify-center gap-3 py-4 rounded-xl text-xs font-black uppercase tracking-[0.1em] transition-all hover:scale-[1.02] active:scale-[0.98] ${isLight ? 'bg-indigo-600 text-white shadow-lg' : 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-500/30'}`}
                 >
-                   <Key className="w-4 h-4" /> Switch Billing Key
+                   <Key className="w-4 h-4" /> {showKeyInput ? 'Hide Key Input' : (window.aistudio ? 'Switch Billing Key' : 'Enter Custom Key')}
                 </button>
+                
+                {showKeyInput && (
+                  <div className="animate-fade-in-up space-y-2">
+                    <input
+                      type="password"
+                      value={settings.apiKey || ''}
+                      onChange={(e) => updateSettings({ apiKey: e.target.value })}
+                      placeholder="Enter Gemini API Key..."
+                      className={`w-full p-3 rounded-xl text-xs font-mono outline-none border-2 focus:border-indigo-500/50 transition-all ${inputBg}`}
+                    />
+                    <p className={`text-[9px] px-2 italic ${textMuted}`}>
+                      Your key is stored only in local memory for this session.
+                    </p>
+                  </div>
+                )}
              </div>
 
              {/* APPEARANCE TOGGLES */}

@@ -45,6 +45,7 @@ export interface AppSettings {
   simplifiedMode: boolean; // Disables animations
   modelName: string; // The specific Gemini model to use
   speakAnswer: boolean; // Read answer out loud
+  apiKey?: string; // Custom Gemini API Key
 }
 
 export enum AppState {
@@ -72,5 +73,8 @@ declare global {
       performAction: (action: string, options: QuestionOption[]) => void;
     };
     Tesseract?: any;
+    aistudio?: {
+      openSelectKey: () => Promise<void>;
+    };
   }
 }

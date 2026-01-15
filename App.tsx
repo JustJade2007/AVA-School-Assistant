@@ -104,7 +104,7 @@ const App: React.FC = () => {
 
       try {
           const rawBase64 = base64Image.split(',')[1];
-          const result = await analyzeScreenFrame(rawBase64, settings.modelName);
+          const result = await analyzeScreenFrame(rawBase64, settings.modelName, settings.apiKey);
           
           if (result.error) {
              addLog(`Gemini [${settings.modelName}]: ${result.error}`, 'error');
@@ -260,10 +260,10 @@ const App: React.FC = () => {
   const hudClass = isLight ? "bg-white/95 border-slate-200" : "bg-slate-900/95 border-slate-800";
 
   return (
-    <div className={`min-h-screen font-sans overflow-hidden flex flex-col transition-all duration-700 ${bgClass}`}>
+    <div className={`h-screen font-sans overflow-hidden flex flex-col transition-all duration-700 ${bgClass}`}>
       <canvas ref={canvasRef} className="hidden" />
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
-        <div className={`lg:col-span-8 flex flex-col border-r relative z-10 h-full ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-0">
+        <div className={`lg:col-span-8 flex flex-col border-r relative z-10 h-full min-h-0 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
            <div className={`p-5 flex justify-between items-center shrink-0 border-b ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <div className="flex items-center gap-4">
                  <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-xl shadow-cyan-500/20">
@@ -317,7 +317,7 @@ const App: React.FC = () => {
               )}
            </div>
         </div>
-        <div className={`lg:col-span-4 backdrop-blur-3xl border-l flex flex-col h-full z-20 ${hudClass}`}>
+        <div className={`lg:col-span-4 backdrop-blur-3xl border-l flex flex-col h-full z-20 min-h-0 overflow-hidden ${hudClass}`}>
            <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col p-6">
                <div className={`mb-6 flex items-center justify-between border-b pb-4 ${isLight ? 'border-slate-200' : 'border-white/5'}`}>
                   <span className={`font-black text-xs font-mono tracking-widest uppercase flex items-center gap-3 ${isLight ? 'text-cyan-700' : 'text-cyan-400'}`}><Scan className="w-4 h-4" /> Neural Analysis</span>
@@ -327,7 +327,7 @@ const App: React.FC = () => {
                   <AnalysisView result={lastResult} isAnalyzing={processingRef.current} autoSelectEnabled={settings.autoSelect} simplifiedMode={settings.simplifiedMode} themeMode={settings.themeMode} />
                </div>
            </div>
-           <div className={`h-[55%] min-h-[400px] border-t ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-950'}`}>
+           <div className={`flex-1 min-h-0 border-t flex flex-col overflow-hidden ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-950'}`}>
                <SettingsPanel settings={settings} updateSettings={updateSettings} onLog={addLog} onClearLogs={clearLogs} />
            </div>
         </div>

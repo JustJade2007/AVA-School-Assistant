@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult } from '../types';
 
-export const analyzeScreenFrame = async (base64Image: string, modelName: string): Promise<AnalysisResult> => {
+export const analyzeScreenFrame = async (base64Image: string, modelName: string, apiKey?: string): Promise<AnalysisResult> => {
   // Create a new instance right before making an API call to ensure 
   // it uses the most up-to-date API key (especially after a key switch).
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY || '' });
 
   try {
     const prompt = `
