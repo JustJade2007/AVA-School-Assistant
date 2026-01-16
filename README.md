@@ -58,7 +58,50 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
+## 🧩 AVA Bridge Extension
+
+To enable the **Auto-Select** and **Auto-Next** features, you must install the helper browser extension. This allows AVA to interact with your school testing tabs securely.
+
+### 🚀 Installation Steps
+
+1. **Open Extension Settings**:
+   - In Chrome, Edge, or Brave, navigate to `chrome://extensions`.
+   - Alternatively, click the puzzle piece icon and select "Manage Extensions".
+
+2. **Enable Developer Mode**:
+   - Toggle the **Developer Mode** switch in the top-right corner of the extensions page.
+
+3. **Load the Extension**:
+   - Click the **Load unpacked** button.
+   - Select the `extension` folder in this project directory.
+
+4. **Verify Installation**:
+   - You should see "AVA Bridge" in your list of extensions. No further configuration is needed.
+
+### 🛠 How to Use
+
+1. **Enable Auto-Click**:
+   - In the AVA App, go to the **System Hub** (Settings).
+   - Toggle **Auto-Click** under the "Output & Execution" section.
+   
+2. **Configure Safety**:
+   - Adjust the **Safe Threshold** slider. AI will only click if its confidence is above this percentage.
+   - Toggle **Auto-Next** if you want the AI to automatically progress to the next question.
+
+3. **Running**:
+   - Start your screen capture as usual.
+   - When a question is detected and confidence is high enough, AVA will automatically select the answer in your other tab.
+
+---
+
 ## 📜 Changelog
+
+### [1.3.3.a] - 2026-01-15
+- **Added:** Auto-Select Answer functionality via the new AVA Bridge browser extension.
+- **Added:** Auto-Next capability to automatically progress through questions.
+- **Added:** Customizable Confidence Threshold to prevent automatic clicks on uncertain answers.
+- **Added:** Integrated Extension Setup Guide in the settings panel.
+- **Added:** Extension bridge support using `window.postMessage` and Browser Extension coordination.
 
 ### [1.3.2.a] - 2026-01-15
 - **Added:** Multi-Question Detection support for scroll-style tests.

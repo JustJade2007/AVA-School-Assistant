@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "AVA Bridge",
+  "version": "1.0",
+  "description": "Bridges AVA School Assistant with educational platforms.",
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": ["*://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://localhost/*", "*://127.0.0.1/*", "<all_urls>"],
+      "js": ["content_ava.js"],
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_school.js"],
+      "all_frames": true
+    }
+  ]
+}

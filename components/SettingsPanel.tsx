@@ -21,6 +21,7 @@ const GEMINI_MODELS = [
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings, onLog, onClearLogs, logs }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showKeyInput, setShowKeyInput] = useState(false);
+  const [showExtensionGuide, setShowExtensionGuide] = useState(false);
   const isLight = settings.themeMode === 'light';
 
   const handleToggle = (key: keyof AppSettings, label: string) => {
@@ -390,26 +391,77 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
             </div>
 
             {/* AUTO SELECT */}
-            <div className={`flex items-center justify-between p-5 rounded-2xl border-2 transition-all ${settings.autoSelect ? 'border-emerald-500/50' : 'border-transparent'} ${cardClass}`}>
-            <div className="flex flex-col">
-                <span className="text-base font-black flex items-center gap-2">
+            <div className={`p-5 rounded-2xl border-2 transition-all ${settings.autoSelect ? 'border-emerald-500/50' : 'border-transparent'} ${cardClass}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col">
+                  <span className="text-base font-black flex items-center gap-2">
                     <MousePointer2 className={`w-5 h-5 ${settings.autoSelect ? 'text-emerald-400' : 'text-slate-500'}`} />
                     Auto-Click
-                </span>
-                <span className={`text-[10px] uppercase font-bold tracking-widest ${textMuted}`}>Instant Execution</span>
-            </div>
-            <button
-                onClick={() => handleToggle('autoSelect', 'Auto-Pilot Click')}
-                className={`
+                  </span>
+                  <span className={`text-[10px] uppercase font-bold tracking-widest ${textMuted}`}>Instant Execution</span>
+                </div>
+                <button
+                  onClick={() => handleToggle('autoSelect', 'Auto-Pilot Click')}
+                  className={`
                     w-16 h-9 rounded-full transition-all relative
                     ${settings.autoSelect ? 'bg-emerald-500' : (isLight ? 'bg-slate-300' : 'bg-slate-700')}
-                `}
+                  `}
                 >
-                <div className={`
+                  <div className={`
                     w-7 h-7 rounded-full bg-white absolute top-1 transition-all
                     ${settings.autoSelect ? 'left-8' : 'left-1'}
-                `} />
+                  `} />
                 </button>
+              </div>
+
+              {settings.autoSelect && (
+                <div className="space-y-4 pt-4 border-t border-slate-700/30 animate-fade-in-up">
+                  {/* AUTO NEXT */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold flex items-center gap-2">
+                        <PlayCircle className="w-4 h-4 text-emerald-400" /> Auto-Next
+                      </span>
+                      <span className={`text-[9px] ${textMuted}`}>Automatically progress to next question</span>
+                    </div>
+                    <button
+                      onClick={() => handleToggle('autoNext', 'Auto-Next')}
+                      className={`w-12 h-6 rounded-full relative transition-all ${settings.autoNext ? 'bg-emerald-600' : 'bg-slate-700'}`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${settings.autoNext ? 'left-7' : 'left-1'}`} />
+                    </button>
+                  </div>
+
+                  {/* CONFIDENCE THRESHOLD */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-emerald-400" /> Safe Threshold
+                      </span>
+                      <span className="text-[10px] font-mono font-black text-emerald-400">{(settings.confidenceThreshold * 100).toFixed(0)}%</span>
+                    </div>
+                    <input
+                      type="range" min="0.1" max="1.0" step="0.05"
+                      value={settings.confidenceThreshold}
+                      onChange={(e) => updateSettings({ confidenceThreshold: parseFloat(e.target.value) })}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer bg-slate-700 accent-emerald-400"
+                    />
+                    <p className={`text-[8px] italic leading-tight ${textMuted}`}>
+                      Only clicks if AI is at least {Math.round(settings.confidenceThreshold * 100)}% sure.
+                    </p>
+                  </div>
+
+                  <div className={`p-3 rounded-xl text-[9px] font-bold border flex justify-between items-center ${isLight ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+                    <span>Requires Browser Extension to be installed.</span>
+                    <button 
+                      onClick={() => setShowExtensionGuide(true)}
+                      className="px-2 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors"
+                    >
+                      Setup Guide
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
         </div>
       </div>
@@ -565,6 +617,69 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, updateSettings,
             )}
         </div>
       </div>
+
+      {showExtensionGuide && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className={`w-full max-w-lg p-8 rounded-3xl border-2 shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar ${isLight ? 'bg-white border-emerald-200' : 'bg-slate-900 border-emerald-500/30'}`}>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4 text-emerald-500">
+                <div className="p-3 rounded-2xl bg-emerald-500/10">
+                  <Sparkles className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black uppercase tracking-tight">Extension Setup</h2>
+                  <p className="text-xs font-bold opacity-60">Enable Auto-Click Capabilities</p>
+                </div>
+              </div>
+              <button onClick={() => setShowExtensionGuide(false)} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <h3 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px]">1</span>
+                  Load the Extension
+                </h3>
+                <ol className={`text-xs space-y-3 list-decimal pl-5 ${textMuted}`}>
+                  <li>Open your browser (Chrome/Edge/Brave) and go to <b>Extensions</b> (chrome://extensions).</li>
+                  <li>Enable <b>Developer Mode</b> (toggle in the top-right corner).</li>
+                  <li>Click <b>Load unpacked</b>.</li>
+                  <li>Select the <code className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">extension</code> folder in the project directory.</li>
+                </ol>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px]">2</span>
+                  How it Works
+                </h3>
+                <p className={`text-xs ${textMuted}`}>
+                  Once installed, the extension acts as a bridge. When AVA detects an answer, it sends a secure message to the extension, which then finds and clicks the corresponding button on your school website.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-black uppercase text-emerald-400 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px]">3</span>
+                  Permissions
+                </h3>
+                <p className={`text-xs ${textMuted}`}>
+                  The extension requires "Host Permissions" to interact with the school websites. It only activates when you trigger a scan in the AVA dashboard.
+                </p>
+              </div>
+
+              <button 
+                onClick={() => setShowExtensionGuide(false)}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-600/30"
+              >
+                Got it, let's go!
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={`text-[9px] ${textMuted} font-mono text-center opacity-50`}>
         AVA v1.2 // Neural Interface Ready

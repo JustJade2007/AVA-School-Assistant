@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Monitor, StopCircle, Video, Scan, Aperture, Github } from 'lucide-react';
 import { AnalysisResult, AppSettings, AppState, LogEntry } from './types';
-import { analyzeScreenFrame, checkForNewQuestion } from './services/geminiService';
+import { analyzeScreenFrame, checkForNewQuestion, verifySelection } from './services/geminiService';
 import { detectText, calculateTextSimilarity, isTextSubset } from './services/ocrService';
 import { getCookie, setCookie, encryptData, decryptData } from './services/storageService';
 import AnalysisView from './components/AnalysisView';
@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   smartScanSensitivity: 50,
   confidenceThreshold: 0.7,
   autoSelect: false,
+  autoNext: false,
   showLogs: true,
   themeMode: 'dark',
   simplifiedMode: false,
@@ -40,6 +41,7 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [scanProgress, setScanProgress] = useState(0);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [extensionConnected, setExtensionConnected] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null); 
@@ -131,6 +133,80 @@ const App: React.FC = () => {
       return canvas.toDataURL('image/jpeg', 0.8);
   };
 
+  const handleAutoPilot = async (option: any, nextButtonBox: any, clickNext: boolean) => {
+      addLog(`[AUTO-PILOT] TARGET IDENTIFIED: "${option.text.substring(0, 30)}..."`, 'success');
+      
+      let attempts = 0;
+      const maxRetries = 5;
+      let verified = false;
+
+      while (attempts < maxRetries && !verified) {
+          attempts++;
+          addLog(`[AUTO-PILOT] EXECUTION ATTEMPT ${attempts}/${maxRetries}...`, 'info');
+
+          // Build Sequence
+          const sequence: any[] = [];
+          
+          if (option.boundingBox) {
+              const { ymin, xmin, ymax, xmax } = option.boundingBox;
+              const x = (xmin + xmax) / 2;
+              const y = (ymin + ymax) / 2;
+              sequence.push({ 
+                type: 'click', 
+                x, 
+                y, 
+                description: `[Coord] Select: ${option.text.substring(0, 15)}...` 
+              });
+          }
+          
+          sequence.push({ 
+             type: 'text_click', 
+             text: option.text, 
+             description: `[Text] Select: ${option.text.substring(0, 15)}...` 
+          });
+
+          window.postMessage({
+              type: 'AVA_ACTION',
+              action: 'EXECUTE_SEQUENCE',
+              payload: { sequence }
+          }, '*');
+
+          // Wait for click to register
+          await new Promise(r => setTimeout(r, 2000));
+
+          // Verify
+          addLog(`[AUTO-PILOT] Verifying selection...`, 'info');
+          const verifyImg = captureFrame();
+          if (verifyImg) {
+              const verification = await verifySelection(verifyImg, option.text, settings.modelName, settings.apiKey);
+              if (verification.isSelected) {
+                  verified = true;
+                  addLog(`[AUTO-PILOT] SELECTION CONFIRMED (Confidence: ${(verification.confidence * 100).toFixed(0)}%)`, 'success');
+              } else {
+                  addLog(`[AUTO-PILOT] Verification Failed. Retrying...`, 'warning');
+              }
+          }
+      }
+
+      if (verified && clickNext) {
+          addLog(`[AUTO-PILOT] Proceeding to Next Question...`, 'info');
+          const nextSeq: any[] = [];
+          if (nextButtonBox) {
+              const { ymin, xmin, ymax, xmax } = nextButtonBox;
+              nextSeq.push({ type: 'click', x: (xmin + xmax)/2, y: (ymin + ymax)/2, description: 'Click Next' });
+          } else {
+              nextSeq.push({ type: 'next_click', description: 'Click Next (Search)' });
+          }
+          window.postMessage({
+              type: 'AVA_ACTION',
+              action: 'EXECUTE_SEQUENCE',
+              payload: { sequence: nextSeq }
+          }, '*');
+      } else if (!verified) {
+          addLog(`[AUTO-PILOT] Failed to verify selection after ${maxRetries} attempts. Stopping.`, 'error');
+      }
+  };
+
   const performAnalysis = async (base64Image: string, shouldFlash: boolean = true) => {
       if (!settings.apiKey) {
         setShowApiKeyModal(true);
@@ -181,9 +257,17 @@ const App: React.FC = () => {
 
           setLastResult(result);
 
-          if (settings.autoSelect && result.hasQuestion && result.suggestedAction && result.options) {
-             if (window.electronAPI) {
-                window.electronAPI.performAction(result.suggestedAction!, result.options);
+          if (settings.autoSelect && result.hasQuestion && result.options) {
+             const correctOption = result.options.find(o => o.isCorrect);
+             
+             if (correctOption) {
+                if (correctOption.confidenceScore >= settings.confidenceThreshold) {
+                   await handleAutoPilot(correctOption, result.nextButton, settings.autoNext);
+                } else {
+                   addLog(`[AUTO-PILOT] ABORTED: Confidence too low (${(correctOption.confidenceScore * 100).toFixed(0)}% < ${(settings.confidenceThreshold * 100).toFixed(0)}%). Manual confirmation required.`, 'warning');
+                }
+             } else {
+                addLog(`[AUTO-PILOT] No clear answer identified for selection.`, 'warning');
              }
           }
       } catch (e) {
@@ -338,7 +422,19 @@ const App: React.FC = () => {
       }
     };
     loadKey();
-  }, []);
+
+    // Listen for extension
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'AVA_EXTENSION_READY') {
+        if (!extensionConnected) {
+           setExtensionConnected(true);
+           addLog("Bridge Connected: Browser Extension Detected", 'success');
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [extensionConnected]);
 
   useEffect(() => {
     let interval: number | undefined;
@@ -423,6 +519,11 @@ const App: React.FC = () => {
                  <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
                     <div className={`w-2.5 h-2.5 rounded-full ${appState === AppState.STREAMING ? 'bg-emerald-500' : 'bg-red-500'} ${!settings.simplifiedMode && appState === AppState.STREAMING ? 'animate-pulse' : ''}`} />
                     <span className={`font-black text-[10px] tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>{appState === AppState.STREAMING ? 'SIGNAL_ACTIVE' : 'SIGNAL_LOST'}</span>
+                 </div>
+                 {/* Extension Status */}
+                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border-2 ${extensionConnected ? (isLight ? 'bg-emerald-50 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/30') : (isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800')}`} title={extensionConnected ? "Extension Active" : "Extension Not Detected"}>
+                    <div className={`w-2 h-2 rounded-full ${extensionConnected ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+                    <span className={`font-black text-[9px] tracking-widest ${extensionConnected ? 'text-emerald-500' : 'text-slate-500'}`}>BRIDGE</span>
                  </div>
               </div>
            </div>

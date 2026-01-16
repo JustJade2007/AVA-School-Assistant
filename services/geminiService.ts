@@ -56,10 +56,12 @@ export const analyzeScreenFrame = async (
       2. For EACH question detected:
          - Extract the 'questionText' accurately (concise, no options or UI noise).
          - Transcribe all visible 'options' accurately.
+         - For EACH option, provide the normalized 'boundingBox' [ymin, xmin, ymax, xmax] of the clickable area (radio button or text).
          - Determine the logically correct option. IMPORTANT: Ignore any existing selections or highlights in the image.
          - Assign a 'confidenceScore' (0.0 to 1.0) to each option.
          - Provide a brief 'reasoning' (justification).
-         - Define the normalized 'boundingBox' (ymin, xmin, ymax, xmax).
+         - Define the normalized 'boundingBox' of the entire question area.
+         - Identify the "Next", "Submit", or "Continue" button if visible, and provide its normalized 'boundingBox' in 'nextButton'.
       
       ${customInstructions ? `USER CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
 
@@ -92,10 +94,16 @@ export const analyzeScreenFrame = async (
             "questions": [
               {
                 "questionText": "string",
-                "options": [{"text": "string", "isCorrect": boolean, "confidenceScore": number}],
+                "options": [{
+                    "text": "string", 
+                    "isCorrect": boolean, 
+                    "confidenceScore": number,
+                    "boundingBox": {"ymin": number, "xmin": number, "ymax": number, "xmax": number}
+                }],
                 "reasoning": "string",
                 "suggestedAction": "string",
-                "boundingBox": {"ymin": number, "xmin": number, "ymax": number, "xmax": number}
+                "boundingBox": {"ymin": number, "xmin": number, "ymax": number, "xmax": number},
+                "nextButton": {"ymin": number, "xmin": number, "ymax": number, "xmax": number}
               }
             ]
           }
@@ -151,6 +159,12 @@ export const analyzeScreenFrame = async (
                                ymin: { type: Type.NUMBER }, xmin: { type: Type.NUMBER }, ymax: { type: Type.NUMBER }, xmax: { type: Type.NUMBER }
                              }
                           },
+                          nextButton: {
+                             type: Type.OBJECT,
+                             properties: {
+                               ymin: { type: Type.NUMBER }, xmin: { type: Type.NUMBER }, ymax: { type: Type.NUMBER }, xmax: { type: Type.NUMBER }
+                             }
+                          },
                           options: {
                             type: Type.ARRAY,
                             items: {
@@ -158,7 +172,13 @@ export const analyzeScreenFrame = async (
                               properties: {
                                 text: { type: Type.STRING },
                                 isCorrect: { type: Type.BOOLEAN },
-                                confidenceScore: { type: Type.NUMBER }
+                                confidenceScore: { type: Type.NUMBER },
+                                boundingBox: {
+                                   type: Type.OBJECT,
+                                   properties: {
+                                     ymin: { type: Type.NUMBER }, xmin: { type: Type.NUMBER }, ymax: { type: Type.NUMBER }, xmax: { type: Type.NUMBER }
+                                   }
+                                }
                               },
                               required: ["text", "isCorrect", "confidenceScore"]
                             }
@@ -205,6 +225,7 @@ export const analyzeScreenFrame = async (
             parsed.reasoning = first.reasoning;
             parsed.suggestedAction = first.suggestedAction;
             parsed.boundingBox = first.boundingBox;
+            parsed.nextButton = first.nextButton;
           } else {
             parsed.questions = parsed.questions || [];
           }
@@ -288,5 +309,53 @@ export const checkForNewQuestion = async (currentBase64: string, previousBase64:
     return JSON.parse(text.replace(/^```json\s*/, '').replace(/\s*```$/, ''));
   } catch (error: any) {
     return { isNew: false, currentText: "", error: error.message || String(error) };
+  }
+};
+
+export const verifySelection = async (base64Image: string, expectedText: string, modelName: string = "gemini-flash-lite-latest", apiKey?: string): Promise<{ isSelected: boolean, confidence: number }> => {
+  const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY || '' });
+  try {
+    const cleanImage = base64Image.includes('base64,') ? base64Image.split('base64,')[1] : base64Image;
+    const prompt = `
+      Analyze this screenshot.
+      Target Answer Text: "${expectedText}"
+      
+      Task: Determine if the option corresponding to the Target Answer Text is currently SELECTED, CHECKED, HIGHLIGHTED, or FILLED.
+      Look for visual cues like:
+      - Radio button filled/dot
+      - Checkbox checked
+      - Background color change (highlight)
+      - Border color change
+      
+      Return JSON: { "isSelected": boolean, "confidence": number (0.0-1.0) }
+    `;
+
+    const result = await ai.models.generateContent({
+      model: modelName,
+      contents: {
+        parts: [
+          { inlineData: { mimeType: 'image/jpeg', data: cleanImage } },
+          { text: prompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isSelected: { type: Type.BOOLEAN },
+            confidence: { type: Type.NUMBER }
+          },
+          required: ["isSelected", "confidence"]
+        }
+      }
+    });
+
+    const text = result.text || result.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return { isSelected: false, confidence: 0 };
+    return JSON.parse(text.replace(/^```json\s*/, '').replace(/\s*```$/, ''));
+  } catch (error) {
+    console.error("Verification failed", error);
+    return { isSelected: false, confidence: 0 };
   }
 };

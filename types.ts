@@ -1,16 +1,17 @@
 
 
-export interface QuestionOption {
-  text: string;
-  isCorrect: boolean;
-  confidenceScore: number; // 0 to 1
-}
-
 export interface BoundingBox {
   ymin: number;
   xmin: number;
   ymax: number;
   xmax: number;
+}
+
+export interface QuestionOption {
+  text: string;
+  isCorrect: boolean;
+  confidenceScore: number; // 0 to 1
+  boundingBox?: BoundingBox | null;
 }
 
 export interface QuestionData {
@@ -19,6 +20,7 @@ export interface QuestionData {
   reasoning: string | null;
   suggestedAction: string | null;
   boundingBox?: BoundingBox | null;
+  nextButton?: BoundingBox | null;
 }
 
 export interface AnalysisResult {
@@ -34,6 +36,7 @@ export interface AnalysisResult {
   reasoning?: string | null;
   suggestedAction?: string | null;
   boundingBox?: BoundingBox | null;
+  nextButton?: BoundingBox | null;
 }
 
 export interface ExternalContext {
@@ -60,6 +63,7 @@ export interface AppSettings {
   
   confidenceThreshold: number;
   autoSelect: boolean; // Simulates clicking
+  autoNext: boolean; // Automatically clicks next question
 
   // Advanced / Appearance
   showLogs: boolean;
