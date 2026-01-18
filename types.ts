@@ -13,16 +13,35 @@ export interface BoundingBox {
   xmax: number;
 }
 
-export interface AnalysisResult {
-  hasQuestion: boolean;
+export interface QuestionData {
   questionText: string | null;
   options: QuestionOption[];
   reasoning: string | null;
   suggestedAction: string | null;
   boundingBox?: BoundingBox | null;
+}
+
+export interface AnalysisResult {
+  hasQuestion: boolean;
+  questions: QuestionData[]; // Support multiple questions
   error?: string; // API Error message
   modelUsed?: string;
   attempts?: number;
+  
+  // Legacy support for single question access
+  questionText?: string | null;
+  options?: QuestionOption[];
+  reasoning?: string | null;
+  suggestedAction?: string | null;
+  boundingBox?: BoundingBox | null;
+}
+
+export interface ExternalContext {
+  id: string;
+  type: 'link' | 'image' | 'pdf' | 'video' | 'text';
+  value: string; // URL, Base64, or Raw Text
+  name: string;
+  mimeType?: string;
 }
 
 export interface AppSettings {
@@ -50,6 +69,10 @@ export interface AppSettings {
   speakAnswer: boolean; // Read answer out loud
   debugMode: boolean; // Show verbose logs for OCR/AI
   apiKey?: string; // Custom Gemini API Key
+  customInstructions?: string; // Custom AI Instructions
+  externalContext: ExternalContext[];
+  showThinking: boolean; // Show AI thinking while generating
+  alwaysShowThinking: boolean; // Show AI thinking after answer is displayed
 }
 
 export enum AppState {

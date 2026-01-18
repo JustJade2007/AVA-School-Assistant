@@ -1,9 +1,9 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Monitor, StopCircle, Video, Scan, Aperture } from 'lucide-react';
+import { Monitor, StopCircle, Video, Scan, Aperture, Github } from 'lucide-react';
 import { AnalysisResult, AppSettings, AppState, LogEntry } from './types';
 import { analyzeScreenFrame, checkForNewQuestion } from './services/geminiService';
 import { detectText, calculateTextSimilarity, isTextSubset } from './services/ocrService';
+import { getCookie, setCookie, encryptData, decryptData } from './services/storageService';
 import AnalysisView from './components/AnalysisView';
 import SettingsPanel from './components/SettingsPanel';
 import ConsoleLog from './components/ConsoleLog';
@@ -21,9 +21,13 @@ const DEFAULT_SETTINGS: AppSettings = {
   showLogs: true,
   themeMode: 'dark',
   simplifiedMode: false,
-  modelName: 'gemini-3-flash-preview',
+  modelName: 'gemini-flash-lite-latest',
   speakAnswer: false,
   debugMode: false,
+  customInstructions: '',
+  externalContext: [],
+  showThinking: true,
+  alwaysShowThinking: false,
 };
 
 const App: React.FC = () => {
@@ -34,6 +38,8 @@ const App: React.FC = () => {
   const [boundingBoxStyle, setBoundingBoxStyle] = useState<React.CSSProperties | null>(null);
   const [isFlashing, setIsFlashing] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null); 
@@ -83,14 +89,24 @@ const App: React.FC = () => {
    * Voice Synthesis helper
    */
   const speakAnswer = useCallback((result: AnalysisResult) => {
-    if (!settings.speakAnswer || !result.hasQuestion) return;
+    if (!settings.speakAnswer || !result.hasQuestion || !result.options) return;
     
-    const correctIdx = result.options.findIndex(o => o.isCorrect);
-    if (correctIdx === -1) return;
+    const correctOptions = result.options
+      .map((o, idx) => ({ ...o, label: ['A', 'B', 'C', 'D', 'E', 'F'][idx] || (idx + 1).toString() }))
+      .filter(o => o.isCorrect);
 
-    const label = ['A', 'B', 'C', 'D', 'E', 'F'][correctIdx] || (correctIdx + 1).toString();
-    const answerText = result.options[correctIdx].text;
-    const utterance = new SpeechSynthesisUtterance(`The answer is ${label}. ${answerText}`);
+    if (correctOptions.length === 0) return;
+
+    let message = "";
+    if (correctOptions.length === 1) {
+      message = `The answer is ${correctOptions[0].label}. ${correctOptions[0].text}`;
+    } else {
+      const labels = correctOptions.map(o => o.label).join(", ");
+      const texts = correctOptions.map(o => `${o.label}: ${o.text}`).join(". ");
+      message = `There are ${correctOptions.length} correct answers: ${labels}. ${texts}`;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(message);
     
     // Aesthetic tuning for voice
     utterance.rate = 1.0;
@@ -115,17 +131,23 @@ const App: React.FC = () => {
       return canvas.toDataURL('image/jpeg', 0.8);
   };
 
-  const performAnalysis = async (base64Image: string) => {
+  const performAnalysis = async (base64Image: string, shouldFlash: boolean = true) => {
+      if (!settings.apiKey) {
+        setShowApiKeyModal(true);
+        addLog("API Key is missing. Please provide a valid API key.", 'error');
+        return;
+      }
       processingRef.current = true;
-      if (!settings.simplifiedMode) {
+      if (!settings.simplifiedMode && shouldFlash) {
         setIsFlashing(true);
         setTimeout(() => setIsFlashing(false), 300);
       }
 
+      addLog("Initiating Neural Analysis...", 'info');
+
       try {
           const rawBase64 = base64Image.split(',')[1];
           
-          // Perform local OCR first to bypass Gemini's RECITATION (copyright) filters
           if (settings.debugMode) addLog("Initiating local OCR scan...", 'info');
           const localOcrText = await detectText(base64Image);
 
@@ -134,16 +156,13 @@ const App: React.FC = () => {
               settings.modelName, 
               settings.apiKey,
               settings.debugMode ? addLog : undefined,
-              localOcrText
+              localOcrText,
+              settings.externalContext,
+              settings.customInstructions
           );
           
           const activeModel = result.modelUsed || settings.modelName;
           const attemptInfo = result.attempts && result.attempts > 1 ? ` (Attempt ${result.attempts})` : '';
-
-          // Inject local OCR text if Gemini used the bypass token
-          if (result.questionText === 'USE_LOCAL_OCR') {
-              result.questionText = localOcrText;
-          }
 
           if (result.error) {
              addLog(`Gemini [${activeModel}]: ${result.error}${attemptInfo}`, 'error');
@@ -153,9 +172,8 @@ const App: React.FC = () => {
              }
           } else if (result.hasQuestion) {
              const fallbackIndicator = result.modelUsed && result.modelUsed !== settings.modelName ? ' [FALLBACK]' : '';
-             addLog(`Analysis [${activeModel}]${fallbackIndicator}: Detected question.${attemptInfo}`, 'success');
+             addLog(`Analysis [${activeModel}]${fallbackIndicator}: Detected ${result.questions.length} question(s).${attemptInfo}`, 'success');
              lastScreenshotRef.current = base64Image; 
-             // Trigger Voice Output
              speakAnswer(result);
           } else if (settings.debugMode) {
              addLog(`Analysis [${activeModel}]: No question found.${attemptInfo}`, 'info');
@@ -163,15 +181,16 @@ const App: React.FC = () => {
 
           setLastResult(result);
 
-          if (settings.autoSelect && result.hasQuestion && result.suggestedAction) {
+          if (settings.autoSelect && result.hasQuestion && result.suggestedAction && result.options) {
              if (window.electronAPI) {
-                window.electronAPI.performAction(result.suggestedAction, result.options);
+                window.electronAPI.performAction(result.suggestedAction!, result.options);
              }
           }
       } catch (e) {
           addLog("Neural link failed.", 'error');
       } finally {
           processingRef.current = false;
+          addLog("Neural Analysis Complete.", 'info');
       }
   };
 
@@ -183,7 +202,7 @@ const App: React.FC = () => {
     if (settings.triggerTime) {
         nextRunDelay = settings.scanIntervalMs;
         const img = captureFrame();
-        if (img) await performAnalysis(img);
+        if (img) await performAnalysis(img, false);
     } 
     else if (settings.triggerSmart) {
         nextRunDelay = 1000;
@@ -191,16 +210,11 @@ const App: React.FC = () => {
             const img = captureFrame();
             if (img) {
                 let shouldCheckAI = true;
-                let referenceForAI = lastOcrTextRef.current;
 
                 if (settings.triggerHybrid) {
                     shouldCheckAI = false;
                     const rawText = await detectText(img);
                     
-                    // Normalize text:
-                    // 1. Replace digits with '#' to ignore timers/counters (e.g. "Time 10" -> "Time #", "Time 09" -> "Time #")
-                    // 2. Remove special chars
-                    // 3. Collapse spaces
                     const text = rawText
                         .replace(/\d+/g, '#') 
                         .replace(/[^a-zA-Z#\s]/g, '')
@@ -213,12 +227,12 @@ const App: React.FC = () => {
                     const similarity = calculateTextSimilarity(text, lastOcrTextRef.current);
                     
                     const sensitivityFactor = settings.smartScanSensitivity / 100; 
-                    const threshold = 0.2 + (sensitivityFactor * 0.6); // 0.68 @ 80
+                    const threshold = 0.2 + (sensitivityFactor * 0.6); 
                     
                     const rawChange = !isMouseCovering && !isFeedbackAdded && similarity < threshold && text.length > 15;
 
                     if (settings.debugMode) {
-                         const msg = `[DEBUG] OCR: "${text.substring(0, 15)}..." | Ref: "${lastOcrTextRef.current.substring(0, 15)}..." | Sim: ${similarity.toFixed(2)} | Sub: ${isMouseCovering}/${isFeedbackAdded} | Stab: ${ocrStabilityCounterRef.current}`;
+                         const msg = `[DEBUG] OCR: "${text.substring(0, 15)}..." | Ref: "${lastOcrTextRef.current.substring(0, 15)}..." | Sim: ${similarity.toFixed(2)} | Stab: ${ocrStabilityCounterRef.current}`;
                          addLog(msg, 'info');
                     }
 
@@ -226,12 +240,8 @@ const App: React.FC = () => {
                         ocrStabilityCounterRef.current += 1;
                         if (ocrStabilityCounterRef.current >= 3) {
                              shouldCheckAI = true;
-                             referenceForAI = lastOcrTextRef.current; // Use the OLD reference for comparison
-                             lastOcrTextRef.current = text; // Update ref to the new text
+                             lastOcrTextRef.current = text; 
                              ocrStabilityCounterRef.current = 0;
-                             if (settings.debugMode) {
-                                 addLog(`Hybrid Trigger: OCR detected change. Verifying with AI...`, 'info');
-                             }
                         }
                     } else {
                         ocrStabilityCounterRef.current = 0;
@@ -239,22 +249,17 @@ const App: React.FC = () => {
                 }
 
                 if (shouldCheckAI) {
-                    const { isNew, currentText, reason, error } = await checkForNewQuestion(img, lastScreenshotRef.current, settings.apiKey);
+                    const { isNew, currentText, error } = await checkForNewQuestion(img, lastScreenshotRef.current, settings.modelName, settings.apiKey);
                     
                     if (error) {
                         addLog(`AI Watchdog Error: ${error}`, 'error');
                     } else if (isNew) {
                          addLog(`AI Watchdog: New question detected.`, 'success');
-                         
                          lastScreenshotRef.current = img; 
                          if (!settings.triggerHybrid) {
                              lastOcrTextRef.current = currentText;
                          }
-                         
-                         await performAnalysis(img);
-                    } else if (settings.debugMode) {
-                         // Log negative result so user knows the AI check happened
-                         addLog(`AI Watchdog: No new question. (${reason || 'Content match'})`, 'info');
+                         await performAnalysis(img, false);
                     }
                 }
             }
@@ -310,9 +315,45 @@ const App: React.FC = () => {
     addLog("Session terminated.", 'info');
   }, [stream, addLog]);
 
-  const updateSettings = (newSettings: Partial<AppSettings>) => {
+  const updateSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
+    if (newSettings.apiKey !== undefined) {
+      if (newSettings.apiKey) {
+        const encrypted = await encryptData(newSettings.apiKey);
+        setCookie('ava_api_key', encrypted, 30);
+      } else {
+        setCookie('ava_api_key', '', -1);
+      }
+    }
     setSettings(prev => ({ ...prev, ...newSettings }));
-  };
+  }, []);
+
+  useEffect(() => {
+    const loadKey = async () => {
+      const savedKey = getCookie('ava_api_key');
+      if (savedKey) {
+        const decrypted = await decryptData(savedKey);
+        if (decrypted) {
+          setSettings(prev => ({ ...prev, apiKey: decrypted }));
+        }
+      }
+    };
+    loadKey();
+  }, []);
+
+  useEffect(() => {
+    let interval: number | undefined;
+    if (appState === AppState.STREAMING && settings.automationEnabled && settings.triggerTime) {
+      const startTime = Date.now();
+      interval = window.setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = (elapsed % settings.scanIntervalMs) / settings.scanIntervalMs * 100;
+        setScanProgress(progress);
+      }, 50);
+    } else {
+      setScanProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [appState, settings.automationEnabled, settings.triggerTime, settings.scanIntervalMs]);
 
   useEffect(() => {
     const updateBox = () => {
@@ -369,9 +410,20 @@ const App: React.FC = () => {
                     <p className={`text-[10px] font-mono tracking-widest uppercase opacity-60`}>Project: Neural Eye</p>
                  </div>
               </div>
-              <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-                 <div className={`w-2.5 h-2.5 rounded-full ${appState === AppState.STREAMING ? 'bg-emerald-500' : 'bg-red-500'} ${!settings.simplifiedMode && appState === AppState.STREAMING ? 'animate-pulse' : ''}`} />
-                 <span className={`font-black text-[10px] tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>{appState === AppState.STREAMING ? 'SIGNAL_ACTIVE' : 'SIGNAL_LOST'}</span>
+              <div className="flex items-center gap-3">
+                 <a 
+                   href="https://github.com/JustJade2007/AVA-School-Assistant" 
+                   target="_blank" 
+                   rel="noopener noreferrer"
+                   className={`p-2 rounded-full border-2 transition-all hover:scale-110 active:scale-95 ${isLight ? 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50' : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800'}`}
+                   title="View on GitHub"
+                 >
+                    <Github className="w-4 h-4" />
+                 </a>
+                 <div className={`flex items-center gap-2 px-4 py-1.5 rounded-full border-2 ${isLight ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                    <div className={`w-2.5 h-2.5 rounded-full ${appState === AppState.STREAMING ? 'bg-emerald-500' : 'bg-red-500'} ${!settings.simplifiedMode && appState === AppState.STREAMING ? 'animate-pulse' : ''}`} />
+                    <span className={`font-black text-[10px] tracking-widest ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>{appState === AppState.STREAMING ? 'SIGNAL_ACTIVE' : 'SIGNAL_LOST'}</span>
+                 </div>
               </div>
            </div>
            <div className={`flex-1 relative flex flex-col justify-center items-center overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-black'}`}>
@@ -395,6 +447,14 @@ const App: React.FC = () => {
            {settings.showLogs && (
              <div className={`h-40 border-t shrink-0 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950 border-slate-800'}`}><ConsoleLog logs={logs} /></div>
            )}
+           {settings.triggerTime && settings.automationEnabled && appState === AppState.STREAMING && (
+             <div className="absolute top-0 left-0 w-full h-1 bg-slate-800/30 z-50">
+                <div 
+                  className="h-full bg-cyan-500 transition-all duration-75 ease-linear"
+                  style={{ width: `${scanProgress}%` }}
+                />
+             </div>
+           )}
            <div className={`h-20 border-t flex items-center justify-between px-8 shrink-0 shadow-2xl ${controlBarClass}`}>
               {!stream ? (
                  <button onClick={startCapture} className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-3 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-cyan-600/30"><Video className="w-5 h-5" /> Connect Neural Link</button>
@@ -414,19 +474,82 @@ const App: React.FC = () => {
         </div>
         <div className={`lg:col-span-4 backdrop-blur-3xl border-l flex flex-col h-full z-20 min-h-0 overflow-hidden ${hudClass}`}>
            <div className="flex-1 min-h-0 overflow-hidden relative flex flex-col p-6">
-               <div className={`mb-6 flex items-center justify-between border-b pb-4 ${isLight ? 'border-slate-200' : 'border-white/5'}`}>
-                  <span className={`font-black text-xs font-mono tracking-widest uppercase flex items-center gap-3 ${isLight ? 'text-cyan-700' : 'text-cyan-400'}`}><Scan className="w-4 h-4" /> Neural Analysis</span>
-                  {processingRef.current && <span className={`text-[10px] font-bold ${!settings.simplifiedMode ? 'animate-pulse' : ''} text-cyan-500`}>SYNCING...</span>}
+               <div className={`mb-6 flex items-center justify-between border-b pb-4 relative overflow-hidden ${isLight ? 'border-slate-200' : 'border-white/5'}`}>
+                  <span className={`font-black text-xs font-mono tracking-widest uppercase flex items-center gap-3 ${isLight ? 'text-cyan-700' : 'text-cyan-400'}`}>
+                    <Scan className={`w-4 h-4 ${processingRef.current ? 'animate-spin' : ''}`} /> 
+                    Neural Analysis
+                  </span>
+                  {processingRef.current && (
+                    <>
+                      <span className="text-[10px] font-bold animate-pulse text-cyan-500">SYNCING...</span>
+                      <div className="absolute bottom-0 left-0 h-[1px] bg-cyan-500 animate-scan w-full" />
+                    </>
+                  )}
                </div>
                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
-                  <AnalysisView result={lastResult} isAnalyzing={processingRef.current} autoSelectEnabled={settings.autoSelect} simplifiedMode={settings.simplifiedMode} themeMode={settings.themeMode} />
+                  <AnalysisView 
+                    result={lastResult} 
+                    isAnalyzing={processingRef.current} 
+                    autoSelectEnabled={settings.autoSelect} 
+                    simplifiedMode={settings.simplifiedMode} 
+                    themeMode={settings.themeMode} 
+                    showThinking={settings.showThinking}
+                    alwaysShowThinking={settings.alwaysShowThinking}
+                  />
                </div>
            </div>
            <div className={`flex-1 min-h-0 border-t flex flex-col overflow-hidden ${isLight ? 'border-slate-200 bg-slate-50' : 'border-slate-800 bg-slate-950'}`}>
-               <SettingsPanel settings={settings} updateSettings={updateSettings} onLog={addLog} onClearLogs={clearLogs} />
+               <SettingsPanel settings={settings} updateSettings={updateSettings} onLog={addLog} onClearLogs={clearLogs} logs={logs} />
            </div>
         </div>
       </div>
+
+      {showApiKeyModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className={`w-full max-w-md p-8 rounded-3xl border-2 shadow-2xl ${isLight ? 'bg-white border-red-200' : 'bg-slate-900 border-red-500/30'}`}>
+            <div className="flex items-center gap-4 mb-6 text-red-500">
+              <div className="p-3 rounded-2xl bg-red-500/10">
+                <Monitor className="w-8 h-8" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-tight">API Key Required</h2>
+                <p className="text-xs font-bold opacity-60">Authentication failed: Neural link inactive</p>
+              </div>
+            </div>
+            
+            <p className={`text-sm mb-6 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+              To use AVA's neural analysis, you must provide a valid Gemini API key. Your key will be encrypted and saved for future sessions.
+            </p>
+
+            <div className="space-y-4">
+              <input
+                type="password"
+                placeholder="Enter Gemini API Key..."
+                className={`w-full p-4 rounded-xl text-sm font-mono outline-none border-2 focus:border-red-500 transition-all ${isLight ? 'bg-slate-50 border-slate-200 text-slate-900' : 'bg-slate-800 border-slate-700 text-white'}`}
+                onChange={(e) => updateSettings({ apiKey: e.target.value })}
+                onKeyDown={(e) => e.key === 'Enter' && settings.apiKey && setShowApiKeyModal(false)}
+              />
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowApiKeyModal(false)}
+                  className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-600' : 'bg-slate-800 hover:bg-slate-700 text-slate-400'}`}
+                >
+                  Later
+                </button>
+                <button 
+                  onClick={() => settings.apiKey && setShowApiKeyModal(false)}
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-600/30"
+                >
+                  Save & Connect
+                </button>
+              </div>
+              <p className="text-[10px] text-center opacity-40 font-bold uppercase tracking-widest">
+                Safe & Encrypted Storage Active
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
