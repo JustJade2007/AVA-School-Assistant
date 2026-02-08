@@ -61,6 +61,10 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 ## 📜 Changelog
 
 ### [1.3.3.a] - 2026-02-08
+- **Improved:** Fill-in-the-blank questions now display the correct answer directly within the question text with a visual highlight.
+- **Improved:** AI question categorization and prompt accuracy for multiple assessment types (matching, categories, etc.).
+- **Added:** Explicit `type` categorization in the analysis data structure for more intelligent UI rendering.
+- **Fixed:** Restored scrolling functionality in the Analysis View that was previously restricted.
 - **Added:** Support for Matching, Categories, Fill-in-the-blank, and Multiple Option question types.
 - **Improved:** Prompt logic to ensure ALL visible questions are detected and answered.
 - **Fixed:** Answer options list is now scrollable when content overflows.

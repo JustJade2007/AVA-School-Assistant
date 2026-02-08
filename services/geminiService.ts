@@ -97,6 +97,7 @@ export const analyzeScreenFrame = async (
             "hasQuestion": boolean,
             "questions": [
               {
+                "type": "string",
                 "questionText": "string",
                 "options": [{"text": "string", "isCorrect": boolean, "confidenceScore": number}],
                 "reasoning": "string",
@@ -148,6 +149,7 @@ export const analyzeScreenFrame = async (
                       items: {
                         type: Type.OBJECT,
                         properties: {
+                          type: { type: Type.STRING },
                           questionText: { type: Type.STRING },
                           reasoning: { type: Type.STRING },
                           suggestedAction: { type: Type.STRING },
@@ -170,7 +172,7 @@ export const analyzeScreenFrame = async (
                             }
                           }
                         },
-                        required: ["questionText", "options"]
+                        required: ["type", "questionText", "options"]
                       }
                     }
                   },
