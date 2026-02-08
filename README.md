@@ -65,6 +65,9 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 - **Improved:** AI question categorization and prompt accuracy for multiple assessment types (matching, categories, etc.).
 - **Added:** Explicit `type` categorization in the analysis data structure for more intelligent UI rendering.
 - **Fixed:** Restored scrolling functionality in the Analysis View that was previously restricted.
+- **Added:** Support for Matching, Categories, Fill-in-the-blank, and Multiple Option question types.
+- **Improved:** Prompt logic to ensure ALL visible questions are detected and answered.
+- **Fixed:** Answer options list is now scrollable when content overflows.
 
 ### [1.3.2.a] - 2026-01-15
 - **Added:** Multi-Question Detection support for scroll-style tests.

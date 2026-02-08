@@ -204,7 +204,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, isAnalyzing, autoSe
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar">
+    <div className="flex flex-col h-full overflow-y-auto">
         {result.questions.map((q, idx) => (
           <QuestionItem 
             key={idx} 

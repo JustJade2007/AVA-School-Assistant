@@ -53,15 +53,14 @@ export const analyzeScreenFrame = async (
       Perform a technical analysis of this screen capture:
       ${ocrText ? `REFERENCE TEXT (Extracted via OCR): "${ocrText}"` : ''}
       1. Identify ALL educational assessment content (questions/quizzes) visible on the screen. It is CRITICAL to capture every single question, not just the first one.
-      2. Support and categorize multiple question types:
-         - 'multiple-choice': Standard format.
-         - 'matching': Return correct pairs as options (e.g. "Paris -> France") with isCorrect=true.
-         - 'categories': Return items grouped by category (e.g. "Apple -> Fruit") with isCorrect=true.
-         - 'fill-in-the-blank': For sentences with a blank (e.g., "The capital of France is ____"). Return the missing word(s) as the correct option.
-         - 'multiple-options': Questions with multiple correct answers.
+      2. Support multiple question types:
+         - Multiple Choice: Standard format.
+         - Matching: Return correct pairs as options (e.g. "Paris -> France") with isCorrect=true.
+         - Categories: Return items grouped by category (e.g. "Apple -> Fruit") with isCorrect=true.
+         - Fill in the Blanks: Return the missing word(s) as the correct option.
+         - Multiple Options: Questions with multiple correct answers.
       3. For EACH question detected:
-         - Assign the correct 'type' from the list above.
-         - Extract the 'questionText' accurately (concise, no options or UI noise). For fill-in-the-blank, ensure the blank is represented as "____".
+         - Extract the 'questionText' accurately (concise, no options or UI noise).
          - Transcribe all visible 'options' accurately. For Matching/Categories, format them as clear pairs/groups.
          - Determine the logically correct option(s). IMPORTANT: Ignore any existing selections or highlights in the image.
          - Assign a 'confidenceScore' (0.0 to 1.0) to each option.
