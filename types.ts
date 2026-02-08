@@ -14,6 +14,7 @@ export interface BoundingBox {
 }
 
 export interface QuestionData {
+  type?: 'multiple-choice' | 'matching' | 'categories' | 'fill-in-the-blank' | 'multiple-options';
   questionText: string | null;
   options: QuestionOption[];
   reasoning: string | null;

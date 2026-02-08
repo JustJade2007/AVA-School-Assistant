@@ -22,9 +22,30 @@ const QuestionItem: React.FC<{
   alwaysShowThinking: boolean;
 }> = ({ question, index, isLight, anim, simplifiedMode, autoSelectEnabled, alwaysShowThinking }) => {
   const [isLogicExpanded, setIsLogicExpanded] = useState(false);
-  const bestOption = question.options.find(o => o.isCorrect);
+  const bestOption = question.options.find(o => o.isCorrect) || question.options.sort((a, b) => b.confidenceScore - a.confidenceScore)[0];
   const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
   const shouldExpandLogic = alwaysShowThinking || isLogicExpanded;
+
+  const renderQuestionText = () => {
+    const text = question.questionText || "Unknown Question Pattern";
+    
+    if (question.type === 'fill-in-the-blank' && bestOption) {
+      // Look for blanks like ____ or ________
+      const parts = text.split(/_{2,}/);
+      if (parts.length > 1) {
+        return (
+          <>
+            {parts[0]}
+            <span className={`px-2 py-0.5 rounded-md mx-1 font-black underline decoration-2 underline-offset-4 ${isLight ? 'bg-emerald-100 text-emerald-700 decoration-emerald-500/30' : 'bg-emerald-500/20 text-emerald-400 decoration-emerald-500/50'}`}>
+              {bestOption.text}
+            </span>
+            {parts.slice(1).join("____")}
+          </>
+        );
+      }
+    }
+    return text;
+  };
 
   return (
     <div className={`mb-10 ${anim('animate-fade-in-up')} border-b pb-8 last:border-0 ${isLight ? 'border-slate-100' : 'border-slate-800'}`} style={{ animationDelay: `${index * 200}ms` }}>
@@ -32,7 +53,7 @@ const QuestionItem: React.FC<{
         <div className="flex items-start gap-3">
            <Terminal className={`w-5 h-5 mt-1 flex-shrink-0 ${isLight ? 'text-cyan-600' : 'text-cyan-500'}`} />
            <h2 className={`text-lg font-bold leading-relaxed tracking-wide ${isLight ? 'text-slate-900' : 'text-white'}`}>
-             {question.questionText || "Unknown Question Pattern"}
+             {renderQuestionText()}
            </h2>
         </div>
         
