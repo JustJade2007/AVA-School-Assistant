@@ -52,11 +52,17 @@ export const analyzeScreenFrame = async (
     const prompt = `
       Perform a technical analysis of this screen capture:
       ${ocrText ? `REFERENCE TEXT (Extracted via OCR): "${ocrText}"` : ''}
-      1. Identify ALL educational assessment content (questions/quizzes) visible on the screen.
-      2. For EACH question detected:
+      1. Identify ALL educational assessment content (questions/quizzes) visible on the screen. It is CRITICAL to capture every single question, not just the first one.
+      2. Support multiple question types:
+         - Multiple Choice: Standard format.
+         - Matching: Return correct pairs as options (e.g. "Paris -> France") with isCorrect=true.
+         - Categories: Return items grouped by category (e.g. "Apple -> Fruit") with isCorrect=true.
+         - Fill in the Blanks: Return the missing word(s) as the correct option.
+         - Multiple Options: Questions with multiple correct answers.
+      3. For EACH question detected:
          - Extract the 'questionText' accurately (concise, no options or UI noise).
-         - Transcribe all visible 'options' accurately.
-         - Determine the logically correct option. IMPORTANT: Ignore any existing selections or highlights in the image.
+         - Transcribe all visible 'options' accurately. For Matching/Categories, format them as clear pairs/groups.
+         - Determine the logically correct option(s). IMPORTANT: Ignore any existing selections or highlights in the image.
          - Assign a 'confidenceScore' (0.0 to 1.0) to each option.
          - Provide a brief 'reasoning' (justification).
          - Define the normalized 'boundingBox' (ymin, xmin, ymax, xmax).
